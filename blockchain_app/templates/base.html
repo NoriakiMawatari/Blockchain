@@ -1,0 +1,33 @@
+<!doctype html>
+<head>
+    <title>{% block title %}{% endblock %} - By Noriaki Mawatari</title>
+</head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<body>
+    <div>
+        <a href="/hello">Home</a>
+    </div>
+    <div>
+        <center><h1>{{title}}</h1></center>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <ul>
+        {% for message in messages %}
+        <div class="flash">{{ message }}</div>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+    <nav>
+    <p>Peers Bar</p>
+    </nav>
+    {% block content %}{% endblock %}
+</body>
+<section class="content">
+  <header>
+    {% block header %}{% endblock %}
+  </header>
+</section>
+</html>
