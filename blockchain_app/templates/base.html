@@ -1,33 +1,84 @@
-<!doctype html>
-<head>
-    <title>{% block title %}{% endblock %} - By Noriaki Mawatari</title>
-</head>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<body>
-    <div>
-        <a href="/hello">Home</a>
-    </div>
-    <div>
-        <center><h1>{{title}}</h1></center>
-    </div>
+<!DOCTYPE html>
 
+<html>
+  <head>
+    <title>{{ title }}</title>
+    <style>
+      .container {
+      position: relative;
+      width: 10%;
+    }
+
+    .image {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: max;
+      width: 100%;
+      opacity: 0;
+      transition: .1s ease;
+      border-radius: 50%;
+      background-color: #000;
+    }
+
+    .container:hover .overlay {
+      opacity: 1;
+    }
+
+    .text {
+      color: white;
+      font-size: 20px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      -ms-transform: translate(-50%, -50%);
+    }
+    </style>
+  </head>
+  <body>
+    <div>
+      <a href="/">Home</a>
+    </div>
+    <div align="right">
+      <a href="/"><button>Sync Info</button></a>
+    </div>
+    <center><h1>{{ title }}</h1></center>
+    <hr>
     {% with messages = get_flashed_messages() %}
     {% if messages %}
     <ul>
-        {% for message in messages %}
-        <div class="flash">{{ message }}</div>
-        {% endfor %}
+    {% for message in messages %}
+        <li>{{ message }} </li>
+    {% endfor %}
     </ul>
     {% endif %}
     {% endwith %}
-    <nav>
-    <p>Peers Bar</p>
-    </nav>
+<!--  Peers Bar  -->
+    <h2 class="h2">Peers</h2>
+    <div align="right">
+      <form action="/add_peers" id="add_peer_btn" method="post">
+<!--        <a href="/add_peers" target="_blank"><button>Add Peer</button></a>-->
+        <button>Add Peer</button>
+      </form>
+    </div>
+
+    <div class="container">
+        <img src="static/assets/avatar.png" alt="Avatar" class="image">
+        <div class="overlay">
+            <div class="text">Noriaki</div>
+        </div>
+    </div>
+    <hr>
+<!--    Ends Peers Bar -->
     {% block content %}{% endblock %}
-</body>
-<section class="content">
-  <header>
-    {% block header %}{% endblock %}
-  </header>
-</section>
+  </body>
 </html>

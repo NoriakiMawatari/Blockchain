@@ -1,17 +1,141 @@
+<!-- extend base layout -->
 {% extends "base.html" %}
 
-{% block title %} My BlockChain {% endblock %}
-
 {% block content %}
-<br>
 <center>
-    <form>
-        <textarea class="data" placeholder="Write some data in block"></textarea>
-        <br>
-        <br>
-        <input type="submit" name="submitData" value="Submit">
-    </form>
+<h2>Transaction data:</h2>
+<form action="/submit" id="textform" method="post">
+    <textarea class="data_area" name="block_data" rows="4" cols="50" placeholder="Write something..."></textarea>
+    <br>
+    <a href="{{node_address}}/mine" target="_blank"><button type="button">Mine Block</button></a>
+    <input name="peer" placeholder="Peer name">
+    <input type="submit" value="Add Transaction">
+</form>
 </center>
 
+{% for block in chain %}
+<hr class="short_hr">
+<div class="row" style="margin: 20px;">
+    <div class="column">
+        <div><img src="static/assets/avatar.png" alt="Avatar" class="arrow"></div>
+        {% if block.index == 0 %}
+        <div class="name-header">Block #0 (Genesis Block)</div>
+        {% else %}
+        <div class="name-header">Block #{{block.index}}</div>
+        {% endif %}
+        <div class="block_box-subtitle"> on <i>{{block.timestamp}}</i></div>
+        <div>
+            <div class="block_box-body">
+              <p>Previous Hash: {{block.prev_hash}}</p>
+              <p>Hash: {{block.hash}}</p>
+            </div>
+        </div>
+    </div>
+    <div class="column">
+        <p class="block_box-options">{{block.nonce}}</p>
+        <div class="name-header">Transaction(s):</div>
+        <div>
+            {% for post in posts %}
+            <div class="block_box-body">
+                {% if post.index == block.index %}
+              <li>
+                  {{post.content}}
+              </li>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<hr class="short_hr">
+<center><img class="arrow" src="static/assets/arrow_sym.png"></center>
+{% endfor %}
+<style>
+    .data_area {
+        background-color: ##ffffff;
+    }
+    .arrow {
+        width:50px;
+        height:50px;
+    }
 
+    .block_box {
+        background: #fff;
+        padding: 12px 0px 0px 12px;
+        margin-top: 0px;
+        margin-bottom: 8px;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .block_box-header {
+        padding-bottom: 12px;
+    }
+
+    .block_box-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 22px;
+        float: left;
+        margin-right: 16px;
+        border: 1px solid #fff;
+        box-shadow: 0px 0px 0px 2px #f00;
+    }
+
+    .block_box-avatar::after {
+        content:"";
+        display:block;
+    }
+
+    .block_box-name {
+        font-weight: bold;
+    }
+
+    .block_box-subtitle {
+        color: #000;
+    }
+
+    .block_box-body {
+        margin-top: 16px;
+        margin-bottom: 8px;
+    }
+
+    .block_box-options {
+        float: right;
+    }
+    .option-btn {
+        background: #f8f8f8;
+        border: none;
+        color: #2c3e50;
+        padding: 7px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-left: 2px;
+        margin-right: 2px;
+        outline: none;
+        height: 42px;
+    }
+
+    .row {
+      display: flex;
+    }
+
+    .column {
+      flex: 50%;
+      padding: 10px;
+    }
+
+    .short_hr {
+        width:50%;
+    }
+
+    html {
+        background-color: #9a9a9a;
+    }
+</style>
+</div>
 {% endblock %}

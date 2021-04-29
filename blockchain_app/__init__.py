@@ -13,4 +13,9 @@ def hello():
     return 'Hello, World!'
 
 
+@app.route('/hey')
+def hello_world():
+    return 'Hello, World this is Nori'
+
+
 from blockchain_app import views
