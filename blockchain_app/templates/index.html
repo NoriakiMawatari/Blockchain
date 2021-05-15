@@ -1,55 +1,6 @@
-<!-- extend base layout -->
 {% extends "base.html" %}
 
-{% block content %}
-<center>
-<h2>Transaction data:</h2>
-<form action="/submit" id="textform" method="post">
-    <textarea class="data_area" name="block_data" rows="4" cols="50" placeholder="Write something..."></textarea>
-    <br>
-    <a href="{{node_address}}/mine" target="_blank"><button type="button">Mine Block</button></a>
-    <input name="peer" placeholder="Peer name">
-    <input type="submit" value="Add Transaction">
-</form>
-</center>
-
-{% for block in chain %}
-<hr class="short_hr">
-<div class="row" style="margin: 20px;">
-    <div class="column">
-        <div><img src="static/assets/avatar.png" alt="Avatar" class="arrow"></div>
-        {% if block.index == 0 %}
-        <div class="name-header">Block #0 (Genesis Block)</div>
-        {% else %}
-        <div class="name-header">Block #{{block.index}}</div>
-        {% endif %}
-        <div class="block_box-subtitle"> on <i>{{block.timestamp}}</i></div>
-        <div>
-            <div class="block_box-body">
-              <p>Previous Hash: {{block.prev_hash}}</p>
-              <p>Hash: {{block.hash}}</p>
-            </div>
-        </div>
-    </div>
-    <div class="column">
-        <p class="block_box-options">{{block.nonce}}</p>
-        <div class="name-header">Transaction(s):</div>
-        <div>
-            {% for post in posts %}
-            <div class="block_box-body">
-                {% if post.index == block.index %}
-              <li>
-                  {{post.content}}
-              </li>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-<hr class="short_hr">
-<center><img class="arrow" src="static/assets/arrow_sym.png"></center>
-{% endfor %}
+{% block head %}
 <style>
     .data_area {
         background-color: ##ffffff;
@@ -119,23 +70,68 @@
         outline: none;
         height: 42px;
     }
-
-    .row {
-      display: flex;
-    }
-
-    .column {
-      flex: 50%;
-      padding: 10px;
-    }
-
-    .short_hr {
-        width:50%;
-    }
-
-    html {
-        background-color: #9a9a9a;
-    }
 </style>
-</div>
 {% endblock %}
+
+{% block content %}
+<!--    Create Block's transaction area     -->
+<center>
+<h2>Transaction data:</h2>
+<form action="#" id="transaction_form" method="post">
+    <textarea class="data_area" id="block_text" name="block_text" rows="4" cols="50" placeholder="Write something..."></textarea>
+    <br>
+    <select name="available_peers" id="select_peer_list"></select>
+    <button type="button" id="mine_btn">Mine Block</button>
+    <input type="submit" value="Add Transaction">
+</form>
+</center>
+<!--------------------------------------------->
+<!--    Blockchain display area     -->
+<div id="blockchain_container">
+    {% for block in chain %}
+    <hr class="short_hr">
+    <div class="row" style="margin: 20px;">
+        <div class="column" id="left_block_column">
+            <div><img src="static/assets/avatar.png" alt="Avatar" class="arrow"></div>
+            {% if block.index == 0 %}
+            <div class="name-header">Block #0 (Genesis Block)</div>
+            {% else %}
+            <div class="name-header">Block #{{block.index}}</div>
+            {% endif %}
+            <div class="block_box-subtitle"> on <i>{{block.timestamp}}</i></div>
+            <div>
+                <div class="block_box-body">
+                  <p>Previous Hash: {{block.prev_hash}}</p>
+                  <p>Hash: {{block.hash}}</p>
+                </div>
+            </div>
+        </div>
+        <div class="column" id="right_block_column">
+            <div class="column">
+                <div class="name-header">Transaction(s):</div>
+                <div>
+                    {% for transaction in transactions %}
+                    <div class="block_box-body">
+                        {% if transaction.index == block.index %}
+                        <li>{{transaction.content}}</li>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+           <div class="column">
+               <center class="block_box-options">{{block.nonce}}</center>
+               {% if block.index == 0 %}
+               <p>WELCOME TO MY BLOCKCHAIN APP!</p>
+               {% else %}
+               <p> Block Miner: {{ block.transactions[0]['author'] }}</p>
+               {% endif %}
+           </div>
+        </div>
+    </div>
+    <hr class="short_hr">
+    <center><img class="arrow" src="static/assets/arrow_sym.png" id="arrow"></center>
+    {% endfor %}
+    {% endblock %}
+</div>

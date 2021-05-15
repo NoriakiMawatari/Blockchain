@@ -1,15 +1,38 @@
-from blockchain_app import app
-from flask import render_template, redirect, request
-import datetime
+from datetime import datetime
+from flask import Flask, render_template, request, redirect
+from flask_socketio import SocketIO, emit
+from hashlib import sha256
 import json
 import requests
-from datetime import datetime
-from hashlib import sha256
+
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socket_io = SocketIO(app)
 
 
 class Block:
-    """Block class to define its content"""
-    def __init__(self, index, transactions, timestamp, prev_hash):
+    """Create instance of Block object containing key information in order to be stored. Also these blocks
+    have certain storage capacities and, when filled, are chained onto the previously filled block, forming a chain of
+    data known as the 'blockchain'.
+
+    Each block stores the following data:
+    - Index: Position that the block have in the blockchain.
+    - Timestamp: Record of when block was created.
+    - Transactions: It can be any kind of information, in this project we use the 'transactions' concept to simulate a
+    cryptocurrency application.
+    - Previous Hash: This is the hash of the former block in chain.
+    - Hash: This may look like a chunk of random alphanumeric values that uniquely identifies the data inside.
+    - Nonce: Number of times the hash was calculated to accomplish the difficulty constrain and become a valid hash.
+
+    Our create_hash method adds an unique hash using the information that compose the block. By the following hashing
+    function:
+                            f ( index + previous hash + timestamp + data + nonce ) = hash
+
+    Hashing is a fundamental part of the block creation, because with the minimal change in data leads to a large change
+    in resulting hash."""
+
+    def __init__(self, index: int, transactions: list, timestamp: datetime, prev_hash: str):
         self.index = index
         self.timestamp = str(timestamp)
         self.transactions = transactions
@@ -22,22 +45,28 @@ class Block:
 
 
 class BlockChain:
+    """A Blockchain is a kind of database built by blocks that are linked by a previous and actual hash. The essence of
+    the blockchain is the immutability or irreversible timeline of data when implemented in a decentralized nature.
+    That means, when a block is filled it can't be removed or changed.
+
+    By instantiating a Blockchain object, a genesis block (Block #0) is created and added to chain list.
+
+    """
     difficulty = 3
 
     def __init__(self):
         self.chain = []
-        self.queued_transactions = []
-        self.genesis_block()
+        self.peers = {}
+        self.create_genesis_block()
 
-    def genesis_block(self):
-        gen = Block(0, [], datetime.now(), "0")
-        gen.hash = self.proof_of_work(gen)
-        print(f"Genesis hash: {gen.hash}")
-        print(f"Genesis prev_hash: {gen.prev_hash}")
-        self.chain.append(gen)
+    def create_genesis_block(self):
+        genesis_block = Block(0, [], datetime.now(), "0")
+        genesis_block.hash = self.proof_of_work(genesis_block)
+        self.chain.append(genesis_block)
 
     def proof_of_work(self, block):
-        """This function iterates over the hash until the difficulty constrain is satisfied."""
+        """This function iterates over the hash until the difficulty constrain is satisfied. Returns a valid/acceptable
+        hash. For this blockchain three zeros at beginning of hash is that requirement."""
         block.nonce = 0
         acceptable_hash = block.create_hash()
         while not acceptable_hash.startswith('0' * self.difficulty):
@@ -46,10 +75,19 @@ class BlockChain:
         return acceptable_hash
 
     def is_valid_pow(self, block, proof):
-        """Verify if block.hash is a valid hash, satisfying difficulty constrain"""
+        """This method verify if block.hash is a valid hash, satisfying difficulty constrain"""
         return proof.startswith('0' * self.difficulty) and proof == block.create_hash()
 
-    def add_to_chain(self, block, proof):
+    @property
+    def get_latest_block(self):
+        return self.chain[-1]
+
+    @property
+    def get_total_blocks(self):
+        return len(self.chain)
+
+    def add_block_to_peer_chain(self, block, proof, block_miner):
+        """Using the latest block in our blockchain an its hash, a block is added to the specific peer chain."""
         last_block = self.get_latest_block
         prev_hash = last_block.hash
 
@@ -61,212 +99,153 @@ class BlockChain:
             return False
         else:
             block.hash = proof
-            self.chain.append(block)
+            self.peers[block_miner]['chain'].append(block)
             return True
 
-    def add_transaction(self, transaction):
-        self.queued_transactions.append(transaction)
+    def add_transaction(self, transaction, author):
+        """Transaction data is added to a queued_transactions list. Each peer has his own list, by giving the author
+        argument we ensure its stored by that specific peer."""
+        if author:
+            self.peers[author]['queued_transactions'].append(transaction)
 
-    def mine(self):
-        """UI to add queued transactions to BlockChain adding them to a Block and executing the Proof of Work"""
-        if not self.queued_transactions:
+    def mine_block(self, block_miner):
+        """The process of determining the block's nonce is called 'mining'. By the proof_of_work method we start with a
+        nonce of 0 and keep incrementing it by 1 until it finds the valid hash. The block_miner is the name of that peer
+        who is mining his own queued_transactions, adding them to a Block and executing the Proof of Work.
+        Then if everything goes well, that block is added to peer's chain and the queued_transactions list is cleaned.
+        """
+
+        miner_queued_transactions = self.peers[block_miner]['queued_transactions']
+        if not miner_queued_transactions:
             return False
 
         last_block = self.get_latest_block
-
         new_block = Block(index=last_block.index + 1,
-                          transactions=self.queued_transactions,
+                          transactions=miner_queued_transactions,
                           timestamp=datetime.now(),
                           prev_hash=last_block.hash)
         proof = self.proof_of_work(new_block)
-        print(f"New block prev_hash: {new_block.prev_hash}")
-        print(f"New block hash: {proof}")
-        self.add_to_chain(new_block, proof)
-        self.queued_transactions = []
+        self.add_block_to_peer_chain(new_block, proof, block_miner)
+        self.peers[block_miner]['queued_transactions'] = []
         return new_block.index
-
-    @property
-    def get_latest_block(self):
-        return self.chain[-1]
-
-    @property
-    def get_total_blocks(self):
-        return len(self.chain)
 
 
 blockchain = BlockChain()
-peers = set()
-
-
-@app.route('/new_transaction', methods=['POST'])
-def new_transaction():
-    data = request.get_json()
-    required_fields = ['author', 'content']
-
-    for field in required_fields:
-        if not data.get(field):
-            return "Invalid transaction data", 404
-
-    data['timestamp'] = str(datetime.now())
-    blockchain.add_transaction(data)
-    return "Success", 201
+queued_transactions = []
 
 
 @app.route('/chain', methods=['GET'])
 def get_chain():
+    """User can visits this url to visualize the blockchain content in JSON format."""
     chain_info = []
     for block in blockchain.chain:
         chain_info.append(block.__dict__)
     return json.dumps({"length": len(chain_info),
-                       "chain": chain_info})
+                       "chain": chain_info,
+                       "peers": [peer for peer in blockchain.peers.keys()]})
 
 
-@app.route('/mine', methods=['GET'])
-def mine_unconfirmed_transactions():
-    result = blockchain.mine()
-    if not result:
-        return "No transactions to mine"
-    else:
-        chain_len = len(blockchain.chain)
-        updated_chain()
-        if chain_len == len(blockchain.chain):
-            announce_new_block(blockchain.get_latest_block)
-        return f"Block #{result} mined"
+@app.route('/queued_transactions/<peer_name>')
+def get_queued_transactions(peer_name):
+    queued_transactions_per_user = blockchain.peers[peer_name]['queued_transactions']
+    return json.dumps(queued_transactions_per_user)
 
 
-@app.route('/queued_transactions')
-def get_queued_transactions():
-    return json.dumps(blockchain.queued_transactions)
-
-
-@app.route('/add_peers', methods=['POST'])
-def add_peer():
-    nodes = request.get_json()
-    print(f"\nNodes in add_peer: {nodes}")
-    if not nodes:
-        return "Invalid data", 400
-    for node in nodes:
-        peers.add(node)
-    print(peers)
-    print(type(peers))
-    return "Success", 201
-
-
-@app.route('/login', methods=['POST', 'GET'])
-def login():
-    if request.method == 'POST':
-        return redirect('index.html')
-    else:
-        return render_template('login.html')
-
-
-def updated_chain():
-    global blockchain
-    longest_chain = None
-    chain_len = len(blockchain.chain)
-
-    for node in peers:
-        response = request.get(f'https://{node}/chain')
-        node_len = response.json()['length']
-        chain = response.json()['chain']
-        if node_len > chain_len:
-            chain_len = node_len
-            longest_chain = chain
-
-    if longest_chain:
-        blockchain = longest_chain
-        return True
-    return False
-
-
-@app.route('/add_block_p2p', methods=['POST'])
-def validate_and_add_block():
-    data = request.get_json()
-    block = Block(data["index"],
-                  data["transactions"],
-                  data["timestamp"],
-                  data["prev_hash"])
-    proof = data["hash"]
-    added = blockchain.add_to_chain(block, proof)
-
-    if not added:
-        return "Block was discarded by node", 400
-    return "Block added to chain", 201
-
-
-def announce_new_block(block):
-    for peer in peers:
-        url = f"https:://{peer}/add_block_p2p"
-        requests.post(url, data=json.dumps(block.__dict__, sort_keys=True))
-
-
-# The node with which our application interacts, there can be multiple such nodes as well.
-CONNECTED_NODE_ADDRESS = "http://127.0.0.1:5000"
-posts = []
-
-
-def fetch_posts():
-    """
-    Function to fetch the chain from a blockchain node, parse the
-    data and store it locally.
-    """
-    get_chain_address = f"{CONNECTED_NODE_ADDRESS}/chain"
-    print(f"\nChain ADDRESS {get_chain_address}")
-    response = requests.get(get_chain_address)
-    print(f"\nResponse for the chain address gotten {response}")
-    print(f"\nResponse content: {response.content}")
+def fetch_queued_transactions():
+    """This function uses the information stored in a chain route to collect transactions per block in a global list
+    that is going to be parsed by the web app. """
+    response = requests.get(f"{request.host_url}chain")
     if response.status_code == 200:
-        content = []
-        chain = json.loads(response.content)
-        print(f"\nChain {chain}")
-        for block in chain["chain"]:
+        transactions_to_fetch = []
+        chain_content = json.loads(response.content)
+        for block in chain_content["chain"]:
             for transaction in block["transactions"]:
                 transaction["index"] = block["index"]
                 transaction["hash"] = block["prev_hash"]
-                content.append(transaction)
-        global posts
-        posts = sorted(content, key=lambda key: key['timestamp'], reverse=False)
-        print(f"\nPosts: {posts}")
-        return chain
+                transactions_to_fetch.append(transaction)
+        global queued_transactions
+        queued_transactions = sorted(transactions_to_fetch, key=lambda key: key['timestamp'], reverse=False)
 
 
 @app.route('/')
-def home_page():
-    chain = fetch_posts()
-    print(f"THIS IS CHAIN: {chain}")
+def blockchain_index():
+    fetch_queued_transactions()
     return render_template('index.html',
-                           title='Nori Blockchain',
-                           posts=posts,
-                           node_address=CONNECTED_NODE_ADDRESS,
+                           title='My Blockchain App',
                            readable_time=datetime.now(),
-                           bc=blockchain,
-                           chain=chain['chain']
-                           )
+                           transactions=queued_transactions,
+                           chain=blockchain.chain,
+                           peers=blockchain.peers)
 
 
-@app.route('/submit', methods=['POST'])
-def submit_textarea():
-    """
-    Endpoint to create a new transaction via our application.
-    """
-    post_content = request.form["block_data"]
-    author = request.form["peer"]
+@socket_io.event
+def my_ping():
+    """This event is called by each client and send a "pong" message so the round trip time is measured.
+    When the pong is received, the time from the ping is stored, and the average of the last 30 samples is average and
+    displayed by jQuery section in the base.html file."""
+    emit('my_pong')
 
-    post_object = {
-        'author': author,
-        'content': post_content,
-    }
 
-    # Submit a transaction
-    new_transaction_address = f"{CONNECTED_NODE_ADDRESS}/new_transaction"
+@socket_io.event
+def peers_handler(peer_name: str):
+    """This event handler the peer_name input and evaluates if it is acceptable. Whether it is, then name is added to
+    the peers dictionary and a unique session id is given to it, also the queued_transactions list and a copy of the
+    current blockchain.
 
-    requests.post(new_transaction_address,
-                  json=post_object,
+    The broadcast_peer_status is emitted in order to communicate other online peers that a new peer is active."""
+    if peer_name in [peer for peer in blockchain.peers.keys()] or peer_name == '':
+        emit('error_alert', peer_name)
+    else:
+        blockchain.peers[peer_name] = {'id': request.sid,
+                                       'queued_transactions': [],
+                                       'chain': blockchain.chain}
+        emit('display_peer_info', peer_name)
+        emit('broadcast_peers_status', peer_name, broadcast=True)
+
+
+@socket_io.event
+def submit_transaction(block_data):
+    """Event that receives transaction information from transaction form in application and stores it in JSON object."""
+    if block_data['block_author'] is None:
+        emit('error_alert', block_data['block_author'])
+    transaction_info = {'content': block_data['block_text'],
+                        'author': block_data['block_author'],
+                        'author_id': blockchain.peers[block_data['block_author']]['id']}
+
+    add_new_transaction_url = f"{request.host_url}add_new_transaction"
+    requests.post(add_new_transaction_url,
+                  json=transaction_info,
                   headers={'Content-type': 'application/json'})
-
+    emit('my_logs', {'msg': f'{block_data["block_author"]} added new transaction.'}, broadcast=True)
     return redirect('/')
 
 
-# def timestamp_to_string(epoch_time):
-#     return epoch_time.strftime('%H:%M')
+@app.route('/add_new_transaction', methods=['POST'])
+def add_new_transaction():
+    """In this endpoint, transaction information is reviewed and added to blockchain."""
+    transaction_data = request.get_json()
+    required_fields = ['author', 'content', 'author_id']
 
+    for field in required_fields:
+        if not transaction_data.get(field):
+            return "Invalid transaction data", 404
+
+    transaction_data['timestamp'] = str(datetime.now())
+    blockchain.add_transaction(transaction_data, transaction_data['author'])
+    return "Success", 201
+
+
+@socket_io.event()
+def mine_unconfirmed_transactions(block_miner):
+    """Event that responds to a 'Mine Block' button in application, broadcast a message to all active peers of mined
+     block in the Logs section."""
+    new_block_index = blockchain.mine_block(block_miner)
+    if not new_block_index:
+        emit('my_logs', {'msg': 'No transactions to mine'})
+    else:
+        emit('display_blockchain_to_all_peers', broadcast=True)
+        return emit('my_logs', {'msg': f'Block #{new_block_index} mined by {block_miner}!'}, broadcast=True)
+
+
+if __name__ == '__main__':
+    socket_io.run(app, port=5000, debug=True)

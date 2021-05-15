@@ -1,84 +1,158 @@
 <!DOCTYPE html>
-
-<html>
-  <head>
-    <title>{{ title }}</title>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
     <style>
-      .container {
-      position: relative;
-      width: 10%;
-    }
+        .row {
+          display: flex;
+        }
 
-    .image {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
+        .column {
+          flex: 50%;
+          padding: 10px;
+        }
 
-    .overlay {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: max;
-      width: 100%;
-      opacity: 0;
-      transition: .1s ease;
-      border-radius: 50%;
-      background-color: #000;
-    }
+        .short_hr {
+            width:50%;
+        }
 
-    .container:hover .overlay {
-      opacity: 1;
-    }
+        html {
+            background-color: #9a9a9a;
+        }
 
-    .text {
-      color: white;
-      font-size: 20px;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      -ms-transform: translate(-50%, -50%);
-    }
+        .text {
+          color: white;
+          font-size: 20px;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          -ms-transform: translate(-50%, -50%);
+        }
+
+        .scrollable {
+            height: 90px;
+            overflow-y:auto
+        }
+
+        .github_logo {
+            width:100px;
+            height:100px;
+        }
     </style>
-  </head>
-  <body>
-    <div>
-      <a href="/">Home</a>
-    </div>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <p>Average ping/pong latency: <b><span id="ping-pong"></span>ms</b></p>
+    <a href="https://github.com/NoriakiMawatari/Blockchain"><img src="static/assets/github.png" class="github_logo"></a>
+<!--    Add Peer button   -->
     <div align="right">
-      <a href="/"><button>Sync Info</button></a>
+        <form id="add_peer_form" method="POST">
+            <input type="text" name="peer_name" id="peer_name" placeholder="Peer Name">
+            <input type="submit" value="Add Your Peer">
+        </form>
     </div>
-    <center><h1>{{ title }}</h1></center>
+<!-------------------------->
+    <center><h1 id="title_text">{{ title }}</h1></center>
     <hr>
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    <ul>
-    {% for message in messages %}
-        <li>{{ message }} </li>
-    {% endfor %}
-    </ul>
-    {% endif %}
-    {% endwith %}
-<!--  Peers Bar  -->
-    <h2 class="h2">Peers</h2>
-    <div align="right">
-      <form action="/add_peers" id="add_peer_btn" method="post">
-<!--        <a href="/add_peers" target="_blank"><button>Add Peer</button></a>-->
-        <button>Add Peer</button>
-      </form>
-    </div>
-
-    <div class="container">
-        <img src="static/assets/avatar.png" alt="Avatar" class="image">
-        <div class="overlay">
-            <div class="text">Noriaki</div>
+<!--    Peers and Logs Bar     -->
+    <div class="row" id="peers_logs_bar">
+        <div class="column">
+            <h2>Peers: </h2>
+            <div id="active_peers" class="scrollable">
+                {% for peer in peers %}
+                <li>{{peer}}</li>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="column">
+            <h2>Logs: </h2>
+            <div id="log_section" class="scrollable"></div>
         </div>
     </div>
     <hr>
-<!--    Ends Peers Bar -->
+<!---------------------->
     {% block content %}{% endblock %}
-  </body>
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+            alert("Welcome to my blockchain app, please start adding your peer.");
+
+            // Interval function that tests message latency by sending a "ping"
+            // message. The server then responds with a "pong" message and the
+            // round trip time is measured.
+            var ping_pong_times = [];
+            var start_time;
+            window.setInterval(function() {
+                start_time = (new Date).getTime();
+                socket.emit('my_ping');
+            }, 1000);
+
+            // Handler for the "pong" message.
+            socket.on('my_pong', function() {
+                var latency = (new Date).getTime() - start_time;
+                ping_pong_times.push(latency);
+                ping_pong_times = ping_pong_times.slice(-30); // keep last 30 samples
+                var sum = 0;
+                for (var i = 0; i < ping_pong_times.length; i++)
+                    sum += ping_pong_times[i];
+                $('#ping-pong').text(Math.round(10 * sum / ping_pong_times.length) / 10);
+            });
+
+            $('form#add_peer_form').submit(function(event) {
+                socket.emit('peers_handler', $('#peer_name').val());
+                if ($('#peer_name').val() != '') {
+
+                    $('form#add_peer_form').remove();
+                }
+                return false;
+            });
+
+            socket.on('display_peer_info', function(peer_name) {
+                $('#title_text').text( peer_name + "'s Blockchain" );
+                $('#log_section').append('<li>' + peer_name + ' connected! </li>');
+                $('#select_peer_list').append('<option value="' + peer_name + '">' + peer_name + '</option>');
+            });
+
+            socket.on('error_alert', function(peer_name) {
+                if (peer_name == '' || peer_name == undefined) {
+                    alert('Peer Name field is missing!!!');
+                    }
+                else {
+                    alert(peer_name + " is already in peers list. Try with another one.")
+                    location.reload();
+                }
+            });
+
+            socket.on('my_logs', function(data, callback_function) {
+                $('#log_section').append('<li>' + data.msg + '</li>');
+                if (callback_function)
+                    callback_function();
+            });
+
+            $('form#transaction_form').submit(function(event) {
+                socket.emit('submit_transaction', {'block_text': $('#block_text').val(),
+                                                   'block_author': $('#select_peer_list').val()});
+                $('#block_text').val('');
+                return false;
+            });
+
+            $('#mine_btn').on('click', function() {
+                socket.emit('mine_unconfirmed_transactions', $('#select_peer_list').val());
+
+            });
+
+            socket.on('display_blockchain_to_all_peers', function () {
+                $('#blockchain_container').load('/ #blockchain_container', function() {});
+            });
+
+            socket.on('broadcast_peers_status', function (peer_name) {
+                $('#log_section').append('<li>' + peer_name + ' is online! </li>');
+                $('#active_peers').load('/ #active_peers', function() {});
+            });
+        });
+    </script>
+</body>
 </html>
