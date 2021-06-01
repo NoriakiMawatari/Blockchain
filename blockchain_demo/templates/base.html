@@ -46,9 +46,9 @@
 </head>
 <body>
     <p>Average ping/pong latency: <b><span id="ping-pong"></span>ms</b></p>
-    <a href="https://github.com/NoriakiMawatari/Blockchain"><img src="static/assets/github.png" class="github_logo"></a>
+    <a href="https://github.com/NoriakiMawatari/Blockchain" target="_blank"><img src="static/assets/github.png" class="github_logo"></a>
 <!--    Add Peer button   -->
-    <div align="right">
+    <div align="right" id="peers_section">
         <form id="add_peer_form" method="POST">
             <input type="text" name="peer_name" id="peer_name" placeholder="Peer Name">
             <input type="submit" value="Add Your Peer">
@@ -78,7 +78,7 @@
     <script type="text/javascript" charset="utf-8">
         $(document).ready(function() {
             var socket = io.connect('http://' + document.domain + ':' + location.port);
-            alert("Welcome to my blockchain app, please start adding your peer.");
+            alert("Welcome to my blockchain demo, please start adding your peer.");
 
             // Interval function that tests message latency by sending a "ping"
             // message. The server then responds with a "pong" message and the
@@ -106,6 +106,7 @@
                 if ($('#peer_name').val() != '') {
 
                     $('form#add_peer_form').remove();
+                    $('#peers_section').append('<a href="/" target="_blank"><button type="button">Add New Peer</button></a>')
                 }
                 return false;
             });
@@ -121,7 +122,7 @@
                     alert('Peer Name field is missing!!!');
                     }
                 else {
-                    alert(peer_name + " is already in peers list. Try with another one.")
+                    alert(peer_name + " is already in peers list. Try with another one.");
                     location.reload();
                 }
             });

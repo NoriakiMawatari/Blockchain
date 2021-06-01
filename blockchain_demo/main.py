@@ -1,14 +1,12 @@
+from blockchain_demo import socket_io
 from datetime import datetime
-from flask import Flask, render_template, request, redirect
-from flask_socketio import SocketIO, emit
+from flask import render_template, request, redirect, Blueprint
+from flask_socketio import emit
 from hashlib import sha256
 import json
 import requests
 
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
-socket_io = SocketIO(app)
+main = Blueprint('main', __name__)
 
 
 class Block:
@@ -66,7 +64,7 @@ class BlockChain:
 
     def proof_of_work(self, block):
         """This function iterates over the hash until the difficulty constrain is satisfied. Returns a valid/acceptable
-        hash. For this blockchain three zeros at beginning of hash is that requirement."""
+        hash. For this blockchain demo three zeros at beginning of hash is that requirement."""
         block.nonce = 0
         acceptable_hash = block.create_hash()
         while not acceptable_hash.startswith('0' * self.difficulty):
@@ -134,7 +132,7 @@ blockchain = BlockChain()
 queued_transactions = []
 
 
-@app.route('/chain', methods=['GET'])
+@main.route('/chain', methods=['GET'])
 def get_chain():
     """User can visits this url to visualize the blockchain content in JSON format."""
     chain_info = []
@@ -145,7 +143,7 @@ def get_chain():
                        "peers": [peer for peer in blockchain.peers.keys()]})
 
 
-@app.route('/queued_transactions/<peer_name>')
+@main.route('/queued_transactions/<peer_name>')
 def get_queued_transactions(peer_name):
     queued_transactions_per_user = blockchain.peers[peer_name]['queued_transactions']
     return json.dumps(queued_transactions_per_user)
@@ -154,28 +152,31 @@ def get_queued_transactions(peer_name):
 def fetch_queued_transactions():
     """This function uses the information stored in a chain route to collect transactions per block in a global list
     that is going to be parsed by the web app. """
-    response = requests.get(f"{request.host_url}chain")
-    if response.status_code == 200:
-        transactions_to_fetch = []
-        chain_content = json.loads(response.content)
-        for block in chain_content["chain"]:
-            for transaction in block["transactions"]:
-                transaction["index"] = block["index"]
-                transaction["hash"] = block["prev_hash"]
-                transactions_to_fetch.append(transaction)
-        global queued_transactions
-        queued_transactions = sorted(transactions_to_fetch, key=lambda key: key['timestamp'], reverse=False)
+    try:
+        response = requests.get(f"{request.host_url}chain")
+        if response.status_code == 200:
+            transactions_to_fetch = []
+            chain_content = json.loads(response.content)
+            for block in chain_content["chain"]:
+                for transaction in block["transactions"]:
+                    transaction["index"] = block["index"]
+                    transaction["hash"] = block["prev_hash"]
+                    transactions_to_fetch.append(transaction)
+            global queued_transactions
+            queued_transactions = sorted(transactions_to_fetch, key=lambda key: key['timestamp'], reverse=False)
+    except requests.exceptions.ConnectionError as error:
+        error.status_code = "Connection to /chain refused"
 
 
-@app.route('/')
+@main.route('/')
 def blockchain_index():
     fetch_queued_transactions()
     return render_template('index.html',
-                           title='My Blockchain App',
+                           title='My Blockchain Demo',
                            readable_time=datetime.now(),
                            transactions=queued_transactions,
                            chain=blockchain.chain,
-                           peers=blockchain.peers)
+                           peers=blockchain.peers,)
 
 
 @socket_io.event
@@ -204,23 +205,27 @@ def peers_handler(peer_name: str):
 
 
 @socket_io.event
-def submit_transaction(block_data):
+def submit_transaction(block_data: dict):
     """Event that receives transaction information from transaction form in application and stores it in JSON object."""
-    if block_data['block_author'] is None:
-        emit('error_alert', block_data['block_author'])
-    transaction_info = {'content': block_data['block_text'],
-                        'author': block_data['block_author'],
-                        'author_id': blockchain.peers[block_data['block_author']]['id']}
+    try:
+        if block_data['block_author'] is None:
+            emit('error_alert', block_data['block_author'])
+        transaction_info = {'content': block_data['block_text'],
+                            'author': block_data['block_author'],
+                            'author_id': blockchain.peers[block_data['block_author']]['id']
+                            }
 
-    add_new_transaction_url = f"{request.host_url}add_new_transaction"
-    requests.post(add_new_transaction_url,
-                  json=transaction_info,
-                  headers={'Content-type': 'application/json'})
-    emit('my_logs', {'msg': f'{block_data["block_author"]} added new transaction.'}, broadcast=True)
-    return redirect('/')
+        add_new_transaction_url = f"{request.host_url}add_new_transaction"
+        requests.post(add_new_transaction_url,
+                      json=transaction_info,
+                      headers={'Content-type': 'application/json'})
+        emit('my_logs', {'msg': f'{block_data["block_author"]} added new transaction.'}, broadcast=True)
+        return redirect('/')
+    except requests.exceptions.ConnectionError as error:
+        error.status_code = "Connection to /add_new_transaction refused"
 
 
-@app.route('/add_new_transaction', methods=['POST'])
+@main.route('/add_new_transaction', methods=['POST'])
 def add_new_transaction():
     """In this endpoint, transaction information is reviewed and added to blockchain."""
     transaction_data = request.get_json()
@@ -245,7 +250,3 @@ def mine_unconfirmed_transactions(block_miner):
     else:
         emit('display_blockchain_to_all_peers', broadcast=True)
         return emit('my_logs', {'msg': f'Block #{new_block_index} mined by {block_miner}!'}, broadcast=True)
-
-
-if __name__ == '__main__':
-    socket_io.run(app, port=5000, debug=True)
