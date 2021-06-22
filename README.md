@@ -1,7 +1,6 @@
 # Blockchain Demo
-A simple demo of a blockchain concepts in Python based on micro-framework [Flask](https://flask.palletsprojects.com/en/2.0.x/tutorial/factory/) 
-and [Flask-SocketIO](https://flask-socketio.readthedocs.io/en/latest/#) module in order to enable communications between 
-clients and a server.
+A simple demo of blockchain concepts in Python based on micro-framework [Flask](https://flask.palletsprojects.com/en/2.0.x/tutorial/factory/) 
+and [Flask-SocketIO](https://flask-socketio.readthedocs.io/en/latest/#) in order to enable client-server communications.
 
 
 ## Instructions to run
@@ -9,17 +8,18 @@ Clone the project
 ```sh
 $ git clone https://github.com/NoriakiMawatari/Blockchain.git
 ```
-Install the dependencies,
-
+Once located on the Blockchain directory, create a virtual environment,
 ```sh
 $ cd Blockchain
-$ pip install -r requirements.txt
+$ python -m venv venv
 ```
-
-Make sure to activate a virtual environment,
-
+Make sure to activate the virtual environment,
 ```sh 
 $ source venv/bin/activate
+```
+Install the dependencies,
+```sh
+$ pip install -r requirements.txt
 ```
 
 Finally, run the following command: 
@@ -29,10 +29,10 @@ Finally, run the following command:
 
 ### Run tests
 ```shell
-(venv) $ pytest
+(venv) $ python -m pytest
 ```
 
 In order to visualize each test instead of only displaying dots, you can run:
 ```sh
-(venv) $ pytest -v
+(venv) $ python -m pytest -v
 ```
