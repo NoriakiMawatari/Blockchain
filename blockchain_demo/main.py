@@ -1,91 +1,175 @@
-from blockchain_demo import socket_io
-from datetime import datetime
-from flask import render_template, request, redirect, Blueprint
-from flask_socketio import emit
-from hashlib import sha256
 import json
+from datetime import datetime
+from hashlib import sha256
+from typing import List, Any, Callable
+
 import requests
+from flask import Blueprint, redirect, render_template, request
+from flask_socketio import emit
+
+from blockchain_demo import socket_io
 
 main = Blueprint('main', __name__)
 
 
 class Block:
-    """Create instance of Block object containing key information in order to be stored. Also these blocks
-    have certain storage capacities and, when filled, are chained onto the previously filled block, forming a chain of
-    data known as the 'blockchain'.
+    """
+    Block object instance.
 
-    Each block stores the following data:
-    - Index: Position that the block have in the blockchain.
-    - Timestamp: Record of when block was created.
-    - Transactions: It can be any kind of information, in this project we use the 'transactions' concept to simulate a
-    cryptocurrency application.
-    - Previous Hash: This is the hash of the former block in chain.
-    - Hash: This may look like a chunk of random alphanumeric values that uniquely identifies the data inside.
-    - Nonce: Number of times the hash was calculated to accomplish the difficulty constrain and become a valid hash.
+    Contains key information in order to be stored. Also these blocks have certain storage capacities and, when filled,
+    are chained onto the previously filled block, forming a chain of data known as the 'blockchain'.
 
-    Our create_hash method adds an unique hash using the information that compose the block. By the following hashing
-    function:
-                            f ( index + previous hash + timestamp + data + nonce ) = hash
-
-    Hashing is a fundamental part of the block creation, because with the minimal change in data leads to a large change
-    in resulting hash."""
-
-    def __init__(self, index: int, transactions: list, timestamp: datetime, prev_hash: str):
+    Parameters
+    ----------
+    index : int
+        Position the block has in the blockchain.
+    transactions: List[Any]
+        It can be any kind of information, in this project we use the 'transaction' concept to simulate a
+        cryptocurrency application.
+    timestamp: datetime
+        Record of when block was created.
+    prev_hash: str
+        This is the hash of the former block in chain.
+    nonce: int
+        Number of times the hash was calculated to accomplish the difficulty constrain and become a valid hash.
+    """
+    def __init__(self, index: int, transactions: List[Any], timestamp: datetime, prev_hash: str, nonce: int = 0) -> None:
         self.index = index
         self.timestamp = str(timestamp)
         self.transactions = transactions
         self.prev_hash = prev_hash
+        self.nonce = nonce
 
-    def create_hash(self):
+    @property
+    def create_hash(self) -> str:
+        """
+        str: This may look like a chunk of random alphanumeric values that uniquely identifies the data inside called
+        hash.
+
+        Notes
+        -----
+        create_hash property generates a unique hash using the information that compose the block.
+        Based on the following hashing function:
+
+        .. math:: f( index + previous hash + timestamp + data + nonce ) = hash
+
+        Hashing is a fundamental part of the block creation, because with the minimal change in data leads to a large
+        change in resulting hash.
+        """
         unique_block_string = json.dumps(self.__dict__, sort_keys=True)
         block_hash = sha256(unique_block_string.encode("utf-8")).hexdigest()
         return block_hash
 
 
 class BlockChain:
-    """A Blockchain is a kind of database built by blocks that are linked by a previous and actual hash. The essence of
+    """
+    Blockchain object instance.
+
+    Kind of database built by blocks that are linked by a previous and actual hash. The essence of
     the blockchain is the immutability or irreversible timeline of data when implemented in a decentralized nature.
     That means, when a block is filled it can't be removed or changed.
 
-    By instantiating a Blockchain object, a genesis block (Block #0) is created and added to chain list.
-
+    Attribute
+    ----------
+    difficulty: int
+        For this blockchain demo three zeros at beginning of hash are required to approve a hash.
     """
     difficulty = 3
 
     def __init__(self):
         self.chain = []
+        """list: Blocks container."""
+
         self.peers = {}
+        """dict: Peers information container"""
+
         self.create_genesis_block()
 
     def create_genesis_block(self):
+        """
+        Notes
+        -----
+        By instantiating a Blockchain object, a genesis block (Block #0) is created and added to chain list.
+        """
         genesis_block = Block(0, [], datetime.now(), "0")
         genesis_block.hash = self.proof_of_work(genesis_block)
         self.chain.append(genesis_block)
 
-    def proof_of_work(self, block):
-        """This function iterates over the hash until the difficulty constrain is satisfied. Returns a valid/acceptable
-        hash. For this blockchain demo three zeros at beginning of hash is that requirement."""
-        block.nonce = 0
-        acceptable_hash = block.create_hash()
+    def proof_of_work(self, block: Block) -> str:
+        """
+        Blockchain class method that iterates over the hash until the difficulty constrain is satisfied.
+        Parameter
+        --------
+        block:
+            Block's information to apply the proof of work.
+
+        Returns
+        -------
+        Valid/acceptable hash.
+        """
+        acceptable_hash = block.create_hash
         while not acceptable_hash.startswith('0' * self.difficulty):
             block.nonce += 1
-            acceptable_hash = block.create_hash()
+            acceptable_hash = block.create_hash
         return acceptable_hash
 
-    def is_valid_pow(self, block, proof):
-        """This method verify if block.hash is a valid hash, satisfying difficulty constrain"""
-        return proof.startswith('0' * self.difficulty) and proof == block.create_hash()
+    def is_valid_pow(self, block: Block, proof: str) -> bool:
+        """
+        This method verify if block.hash is a valid hash, satisfying difficulty constrain.
+
+        Parameters
+        ----------
+        block:
+            Block where hash is going to be evaluated.
+        proof:
+            Hash which meets the difficulty constraint.
+
+        Returns
+        ------
+        bool:
+            True if successful, false otherwise.
+        """
+        return proof.startswith('0' * self.difficulty) and proof == block.create_hash
 
     @property
-    def get_latest_block(self):
+    def get_latest_block(self) -> Block:
+        """
+        Block: `Block` object.
+
+        Notes
+        -----
+        Property to get latest block in the `chain` attribute.
+        """
         return self.chain[-1]
 
     @property
-    def get_total_blocks(self):
+    def get_total_blocks(self) -> int:
+        """
+        int: Number of blocks into the blockchain.
+
+        Notes
+        -----
+        Property to get the length of `chain` attribute.
+        """
         return len(self.chain)
 
-    def add_block_to_peer_chain(self, block, proof, block_miner):
-        """Using the latest block in our blockchain an its hash, a block is added to the specific peer chain."""
+    def add_block_to_peer_chain(self, block: Block, proof: str, block_miner: str) -> bool:
+        """
+        Using the latest block in our `blockchain` an its hash, a block is added to the specific peer chain.
+
+        Parameters
+        ----------
+        block:
+            Block to be added into the blockchain.
+        proof:
+            Hash which meets the difficulty constraint.
+        block_miner:
+            Miner of the unique Block.
+        Returns
+        -------
+        bool:
+            True if successful, false otherwise.
+        """
         last_block = self.get_latest_block
         prev_hash = last_block.hash
 
@@ -100,14 +184,36 @@ class BlockChain:
             self.peers[block_miner]['chain'].append(block)
             return True
 
-    def add_transaction(self, transaction, author):
-        """Transaction data is added to a queued_transactions list. Each peer has his own list, by giving the author
-        argument we ensure its stored by that specific peer."""
+    def add_transaction(self, transaction: str, author: str) -> None:
+        """
+        Transaction data is added to a queued_transactions list. Each peer has his own list, by giving the author
+        argument we ensure its stored by that specific peer.
+
+        Parameters
+        ----------
+        transaction:
+            Data content as a transaction.
+        author:
+            Transaction's author.
+        """
         if author:
             self.peers[author]['queued_transactions'].append(transaction)
 
-    def mine_block(self, block_miner):
-        """The process of determining the block's nonce is called 'mining'. By the proof_of_work method we start with a
+    def mine_block(self, block_miner: str) -> int:
+        """
+        Parameter
+        --------
+        block_miner:
+            Miner/author of the block's transactions.
+
+        Returns
+        -------
+        int:
+            Block's position on the blockchain.
+
+        Notes
+        -----
+        The process of determining the block's nonce is called 'mining'. By the proof_of_work method we start with a
         nonce of 0 and keep incrementing it by 1 until it finds the valid hash. The block_miner is the name of that peer
         who is mining his own queued_transactions, adding them to a Block and executing the Proof of Work.
         Then if everything goes well, that block is added to peer's chain and the queued_transactions list is cleaned.
@@ -133,7 +239,7 @@ queued_transactions = []
 
 
 @main.route('/chain', methods=['GET'])
-def get_chain():
+def get_chain() -> json:
     """User can visits this url to visualize the blockchain content in JSON format."""
     chain_info = []
     for block in blockchain.chain:
@@ -144,12 +250,12 @@ def get_chain():
 
 
 @main.route('/queued_transactions/<peer_name>')
-def get_queued_transactions(peer_name):
+def get_queued_transactions(peer_name: str) -> json:
     queued_transactions_per_user = blockchain.peers[peer_name]['queued_transactions']
     return json.dumps(queued_transactions_per_user)
 
 
-def fetch_queued_transactions():
+def fetch_queued_transactions() -> None:
     """This function uses the information stored in a chain route to collect transactions per block in a global list
     that is going to be parsed by the web app. """
     try:
@@ -180,7 +286,7 @@ def blockchain_index():
 
 
 @socket_io.event
-def my_ping():
+def my_ping() -> None:
     """This event is called by each client and send a "pong" message so the round trip time is measured.
     When the pong is received, the time from the ping is stored, and the average of the last 30 samples is average and
     displayed by jQuery section in the base.html file."""
@@ -188,7 +294,7 @@ def my_ping():
 
 
 @socket_io.event
-def peers_handler(peer_name: str):
+def peers_handler(peer_name: str) -> None:
     """This event handler the peer_name input and evaluates if it is acceptable. Whether it is, then name is added to
     the peers dictionary and a unique session id is given to it, also the queued_transactions list and a copy of the
     current blockchain.
@@ -241,7 +347,7 @@ def add_new_transaction():
 
 
 @socket_io.event()
-def mine_unconfirmed_transactions(block_miner):
+def mine_unconfirmed_transactions(block_miner: str) -> Callable[[Any, Any, bool], Any]:
     """Event that responds to a 'Mine Block' button in application, broadcast a message to all active peers of mined
      block in the Logs section."""
     new_block_index = blockchain.mine_block(block_miner)

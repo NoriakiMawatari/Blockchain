@@ -1,10 +1,12 @@
 from flask import Flask
 from flask_socketio import SocketIO
+from typing import NewType, Any
 
 socket_io = SocketIO()
+App = NewType('App', Flask)
 
 
-def create_app(test_config=None):
+def create_app(test_config: Any = None) -> App:
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(

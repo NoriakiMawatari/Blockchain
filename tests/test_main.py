@@ -20,7 +20,7 @@ def test_add_new_transaction(client):
 def test_block():
     block = Block(123, [], datetime.now(), 'hash_str_sample')
     assert isinstance(block, Block)
-    block_hash = block.create_hash()
+    block_hash = block.create_hash
     assert block_hash is not None
 
 
